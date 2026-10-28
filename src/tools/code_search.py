@@ -64,40 +64,53 @@ async def code_search(query: str, max_snippets: int = 6) -> list[CodeSnippet]:
             )
         ]
 
-    snippets = []
-    for line in output.strip().split("\n"):
-        if not line:
+    return _parse_osgrep_output(output, max_snippets)
+
+
+_HEADER_RE = re.compile(r"^(.+?):(\d+)\s*(?:\[([^\]]+)\])?\s*$")
+
+
+def _parse_osgrep_output(output: str, max_snippets: int) -> list[CodeSnippet]:
+    """Parse osgrep's block output format.
+
+    Each match is a header line (file:line [Tags]) followed by indented
+    snippet lines, e.g.:
+
+        src/auth.py:42 [Definition]
+          def validate_token(token):
+              ...
+
+    followed by a blank line before the next match.
+    """
+    lines = output.split("\n")
+    snippets: list[CodeSnippet] = []
+
+    i = 0
+    while i < len(lines) and len(snippets) < max_snippets:
+        line = lines[i]
+        is_header = bool(line.strip()) and line[:1] not in (" ", "\t")
+        match = _HEADER_RE.match(line) if is_header else None
+
+        if not match:
+            i += 1
             continue
 
-        # osgrep format: path/to/file:line [Tags] Code Snippet
-        # Example: src/auth.py:42 [Definition] def validate_token(token):
-        parsed = _parse_osgrep_line(line)
-        if parsed:
-            snippets.append(parsed)
-            if len(snippets) >= max_snippets:
-                break
+        file_path = match.group(1)
+        line_num = int(match.group(2))
+        tags_str = match.group(3)
+        tags = [t.strip() for t in tags_str.split(",")] if tags_str else None
+
+        i += 1
+        body_lines = []
+        while i < len(lines) and lines[i].strip() and lines[i][:1] in (" ", "\t"):
+            body_lines.append(lines[i].strip())
+            i += 1
+
+        snippets.append(
+            CodeSnippet(file=file_path, line=line_num, text="\n".join(body_lines), tags=tags)
+        )
 
     return snippets
-
-
-def _parse_osgrep_line(line: str) -> CodeSnippet | None:
-    """Parse a single line of osgrep output."""
-    # Match pattern: file:line [optional tags] content
-    # The file:line part is required, tags are optional
-    match = re.match(r"^(.+?):(\d+)\s*(?:\[([^\]]+)\])?\s*(.*)$", line)
-    if not match:
-        return None
-
-    file_path = match.group(1)
-    line_num = int(match.group(2))
-    tags_str = match.group(3)
-    text = match.group(4).strip()
-
-    tags = None
-    if tags_str:
-        tags = [t.strip() for t in tags_str.split(",")]
-
-    return CodeSnippet(file=file_path, line=line_num, text=text, tags=tags)
 
 
 def _format_snippets_for_agent(snippets: list[CodeSnippet]) -> str:
