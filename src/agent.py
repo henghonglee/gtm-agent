@@ -13,7 +13,6 @@ from claude_agent_sdk import (
 )
 
 from src.config import get_config
-from src.tools.code_search import code_search as do_code_search, _format_snippets_for_agent
 from src.tools.web_search import web_search as do_web_search, _format_results_for_agent
 from src.tools.x_tools import x_reply as do_x_reply, Tweet
 
@@ -26,14 +25,13 @@ def _get_system_prompt() -> str:
 Your goal: Write thoughtful, grounded replies to tweets.
 
 Workflow:
-1. First, use code_search to find relevant product context related to the tweet
-2. Use web_search if the tweet references external topics you should verify
-3. Formulate a concise reply (<280 chars) that adds value
-4. Use x_reply to post the reply
+1. Use web_search if the tweet references external topics you should verify
+2. Formulate a concise reply (<280 chars) that adds value
+3. Use x_reply to post the reply
 
 Rules:
 - Never invent features or make unsubstantiated claims
-- Ground all claims in codebase or web search results
+- Ground all claims in web search results
 - Be helpful and friendly, not promotional or salesy
 - If unsure about something, ask a clarifying question instead of asserting
 - Keep replies concise and valuable
@@ -42,38 +40,6 @@ Rules:
 
 
 # Define tools for Claude Agent SDK
-@tool(
-    name="code_search",
-    description="Semantic search of the product codebase. Use natural language queries to find code by concept or behavior (e.g., 'how is authentication handled', 'where are users created', 'pricing logic'). Returns relevant code snippets with file locations.",
-    input_schema={
-        "type": "object",
-        "properties": {
-            "query": {
-                "type": "string",
-                "description": "Natural language query describing what you're looking for in the codebase",
-            },
-            "max_snippets": {
-                "type": "integer",
-                "description": "Maximum number of snippets to return (default 6)",
-                "default": 6,
-            },
-        },
-        "required": ["query"],
-    },
-)
-async def code_search_tool(args: dict) -> dict:
-    """Tool wrapper for code_search."""
-    query = args["query"]
-    max_snippets = args.get("max_snippets", 6)
-
-    snippets = await do_code_search(query, max_snippets)
-    formatted = _format_snippets_for_agent(snippets)
-
-    return {
-        "content": [{"type": "text", "text": formatted}],
-    }
-
-
 @tool(
     name="web_search",
     description="Search the web for up-to-date context, citations, or explanations. Use this when the tweet references external topics or trends.",
@@ -165,7 +131,7 @@ async def x_reply_tool(args: dict) -> dict:
 _mcp_server = create_sdk_mcp_server(
     name="twitter-agent-tools",
     version="1.0.0",
-    tools=[code_search_tool, web_search_tool, x_reply_tool],
+    tools=[web_search_tool, x_reply_tool],
 )
 
 
@@ -206,7 +172,6 @@ async def react_to_tweet(
         system_prompt=_get_system_prompt(),
         mcp_servers={"tools": _mcp_server},
         allowed_tools=[
-            "mcp__tools__code_search",
             "mcp__tools__web_search",
             "mcp__tools__x_reply",
         ],

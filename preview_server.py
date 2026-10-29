@@ -15,7 +15,6 @@ from starlette.responses import HTMLResponse
 from starlette.routing import Route
 
 from src.agent import react_to_tweet_simple
-from src.tools.code_search import code_search as do_code_search, _format_snippets_for_agent
 
 SAMPLE_TEXT = "Just shipped a new feature for semantic code search!"
 SAMPLE_AUTHOR = "someone"
@@ -67,10 +66,10 @@ FORM = f"""
   <button type="submit">Run agent (dry run)</button>
 </form>
 <p class="note">
-  The agent runs its real workflow: semantic code search over this repo (via osgrep),
-  optional web search (Tavily), then drafts and would-post a reply. It needs a real
-  <code>ANTHROPIC_API_KEY</code> to produce an actual model-written reply; without one it
-  still runs end to end and reports the model provider's error.
+  The agent runs its real workflow: optional web search (Tavily), then drafts and
+  would-post a reply. It needs a real <code>ANTHROPIC_API_KEY</code> to produce an actual
+  model-written reply; without one it still runs end to end and reports the model
+  provider's error.
 </p>
 """
 
@@ -84,12 +83,7 @@ async def run(request: Request) -> HTMLResponse:
     text = (form.get("text") or SAMPLE_TEXT).strip()
     author = (form.get("author") or SAMPLE_AUTHOR).strip()
 
-    # Step 1: real semantic code search (osgrep), independent of any model call.
-    # This runs and returns genuine results even when the model step below is blocked.
-    snippets = await do_code_search(text, max_snippets=6)
-    search_output = html.escape(_format_snippets_for_agent(snippets))
-
-    # Step 2: the full agent flow (code_search + web_search + drafted reply + dry-run post).
+    # The full agent flow (web_search + drafted reply + dry-run post).
     result = await react_to_tweet_simple("1", text, author, dry_run=True)
 
     lines = [
@@ -107,17 +101,12 @@ async def run(request: Request) -> HTMLResponse:
 <p class="error">
   The model step is blocked: this preview's <code>ANTHROPIC_API_KEY</code> is a placeholder,
   so the Claude Agent SDK call below fails authentication before it can draft a reply. Add a
-  real key in Configure &rarr; Secrets to see an actual model-written reply here. Step 1 above
-  (semantic code search) does not depend on this key and ran for real.
+  real key in Configure &rarr; Secrets to see an actual model-written reply here.
 </p>
 """
 
     body = f"""
-<h3>Step 1 &mdash; code_search (osgrep), run directly against this repo</h3>
-<p class="note">Real semantic search results for the tweet text above, independent of the model step below.</p>
-<pre>{search_output}</pre>
-
-<h3>Step 2 &mdash; full agent run (code_search + web_search + drafted reply + dry-run post)</h3>
+<h3>Agent run (web_search + drafted reply + dry-run post)</h3>
 {blocked_banner}
 <pre class="{'error' if not result.success else ''}">{agent_output}</pre>
 <p><a href="/">&laquo; Run again</a></p>
