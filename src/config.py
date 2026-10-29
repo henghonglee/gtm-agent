@@ -2,7 +2,6 @@
 
 import os
 from dataclasses import dataclass
-from pathlib import Path
 
 
 @dataclass
@@ -17,9 +16,6 @@ class Config:
 
     # Tavily API
     tavily_api_key: str
-
-    # Codebase path for searching
-    product_repo_path: Path
 
     # Anthropic API (used by Claude Agent SDK)
     anthropic_api_key: str
@@ -36,7 +32,6 @@ class Config:
             x_access_token=os.environ["X_ACCESS_TOKEN"],
             x_access_token_secret=os.environ["X_ACCESS_TOKEN_SECRET"],
             tavily_api_key=os.environ["TAVILY_API_KEY"],
-            product_repo_path=Path(os.environ.get("PRODUCT_REPO_PATH", ".")),
             anthropic_api_key=os.environ["ANTHROPIC_API_KEY"],
             product_name=os.environ.get("PRODUCT_NAME", "our product"),
         )
